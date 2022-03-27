@@ -49,3 +49,19 @@ class Subdataset(tdata.Dataset):
   def __getitem__(self, idx):
     return self.dataset[self.indices[idx]]
 
+def interweaver(*A):
+  n = len(A)
+  names = [a[0] for a in A]
+  steps = [a[1] for a in A]
+  loaders = [a[2] for a in A]
+  iters = [iter(a) for a in loaders]
+  i = 0
+  while True:
+    name = names[i % n]
+    for _ in range(steps[i % n]):
+      try:
+        yield name, next(iters[i % n])
+      except StopIteration:
+        iters[i % n] = iter(loaders[i % n])
+        yield name, next(iters[i % n])
+    i += 1
