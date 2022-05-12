@@ -29,26 +29,26 @@ class ResConv2d(nn.Module):
   def __init__(self, cin, cout, stride=1):
     super(ResConv2d, self).__init__()
     self.seq = nn.Sequential(
-      conv3(cin, cout, stride),
-      gate(),
-      conv3(cout, cout, 1),
+      nn.Conv2d(cin, cout, 3, padding=1, stride=stride),
+      nn.LeakyReLU(),
+      nn.Conv2d(cout, cout, 3, padding=1),
     )
     if cin == cout and stride == 1:
       self.shortcut = None
     elif cin == cout:
-      self.shortcut == nn.AvgPool2d(stride)
+      self.shortcut = nn.AvgPool2d(stride)
     elif stride == 1:
       self.shortcut = nn.Sequential(
         nn.Conv2d(cin, cout, 1, 1, 0),
-        BatchNorm(cout),
+        nn.BatchNorm2d(cout),
       )
     else:
       self.shortcut = nn.Sequential(
         nn.AvgPool2d(stride),
         nn.Conv2d(cin, cout, 1, 1, 0),
-        BatchNorm(cout),
+        nn.BatchNorm2d(cout),
       )
-    self.gate = gate()
+    self.gate = nn.LeakyReLU()
 
   def forward(self, x):
     out = self.seq(x)
