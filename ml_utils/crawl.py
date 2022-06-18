@@ -2,7 +2,6 @@ import os
 import time
 import requests
 import sqlite3
-from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from urllib.parse import urldefrag
 
@@ -70,9 +69,9 @@ class CreepyCrawly:
     """
     pass
   
-  def process_page(self, url, html, soup):
+  def process_page(self, url, response):
     raise NotImplementedError('')
-  
+
   def next_page(self):
     self.c.execute('SELECT url FROM pages WHERE visited = 0 LIMIT 1')
     r = self.c.fetchone()
@@ -126,9 +125,15 @@ class CreepyCrawly:
     if url is None:
       return False
     self.throttler.throttle()
-    r = requests.get(url)
-    soup = BeautifulSoup(r.content)
-    self.process_page(url, r.content, soup)
+    try:
+      r = requests.get(url)
+    except KeyboardInterrupt as e:
+      raise e
+    except:
+      print(f'Error getting "{url}"')
+      self.mark_page_finished(url)
+      return True
+    self.process_page(url, r)
     self.mark_page_finished(url)
     return True
 
