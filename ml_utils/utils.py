@@ -84,3 +84,17 @@ def num_params(model):
       r *= s
     numParams += int(r)
   return numParams
+
+class ReservoirSampling:
+  def __init__(self, n):
+    self.i = 0
+    self.n = n
+    self.results = []
+  def __call__(self, x):
+    self.i += 1
+    if len(self.results) < self.n:
+      self.results.append(x)
+      return
+    s = int(random.random() * self.i)
+    if s < self.n:
+      self.results[s] = x

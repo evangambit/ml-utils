@@ -1,6 +1,21 @@
 from torch.utils import data as tdata
 import numpy as np
 
+class DatasetWrapper(tdata.Dataset):
+  def __init__(self, dataset, args):
+    super().__init__()
+    self.dataset = dataset
+    self.args = args
+  def __getattr__(self, attr):
+    return getattr(self.dataset, attr)
+  def __getitem__(self, idx):
+    A = self.dataset[self.indices[idx]]
+    assert len(A) == len(self.args)
+    R = {}
+    for k, v in zip(self.args, A):
+      R[k] = v
+    return R
+
 class OverlappingSampler(tdata.Sampler):
   def __init__(self, dataset, batch_size, step_size = None) -> None:
     self.indices = np.arange(len(dataset))
