@@ -107,7 +107,7 @@ class RegressionTask(Task):
     Task.__init__(self, name)
     self.avg = avg
     self.std = std
-    self._loss = nn.MSELoss()
+    self._loss = nn.MSELoss(reduction='none')
 
   def create_heads(self, din):
     return {
