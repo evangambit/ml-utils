@@ -127,7 +127,7 @@ class RegressionTask(Task):
 
     if mask_sum == 0.0:
       return 0.0
-    return l.sum() / mask_sum
+    return (l * mask).sum() / mask_sum
 
   def metrics(self, predictions, batch, it, prefix = ''):
     yhat = predictions[self.name]
