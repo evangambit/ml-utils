@@ -21,6 +21,7 @@ class BatchReshape(nn.Module):
 class Task:
   def __init__(self, name):
     self.name = name
+    self.default = None
 
   def loss(self, predictions, batch):
     """
@@ -50,6 +51,7 @@ class ClassificationTask(Task):
     Task.__init__(self, name)
     self.classes = classes
     self._loss = nn.CrossEntropyLoss(reduction='none')
+    self.default = torch.tensor(0, dtype=torch.int64)
 
   def create_heads(self, din):
     return {
@@ -73,6 +75,8 @@ class ClassificationTask(Task):
     y = batch[self.name]
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
+    if mask_sum == 0:
+      return {}
 
     l = self._loss(yhat, y)
 
@@ -107,6 +111,7 @@ class RegressionTask(Task):
     Task.__init__(self, name)
     self.avg = avg
     self.std = std
+    self.default = torch.tensor(0.0, dtype=torch.float32)
     self._loss = nn.MSELoss(reduction='none')
 
   def create_heads(self, din):
@@ -134,6 +139,8 @@ class RegressionTask(Task):
     y = (batch[self.name] - self.avg) / self.std
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
+    if mask_sum == 0:
+      return {}
 
     l = self._loss(yhat, y)
 
