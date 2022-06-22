@@ -61,7 +61,8 @@ class ClassificationTask(Task):
     head = nn.Linear(din, len(self.classes))
     with torch.no_grad():
       b = logit(1.0 / len(self.classes))
-      head.bias = torch.tensor([b] * len(self.classes))
+      head.bias.zero_()
+      head.bias += b
       head.weight.zero_()
     return {
       self.name: head
