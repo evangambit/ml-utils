@@ -1,6 +1,18 @@
 import torch
 from torch import nn
 
+import numpy as np
+
+import math
+
+def logit(x):
+  if isinstance(x, np.ndarray):
+    return np.log(x / (1.0 - x))
+  elif isinstance(x, torch.Tensor):
+    return torch.log(x / (1.0 - x))
+  else:
+    return math.log(x / (1.0 - x))
+
 class Reshape(nn.Module):
   def __init__(self, *shape):
     super(Reshape, self).__init__()
@@ -38,14 +50,6 @@ class Task:
     """
     pass
 
-class LinearHead(nn.Module):
-  def __init__(self, din, dout):
-    super().__init__()
-    self.lin = nn.Linear(din, dout)
-
-  def forward(self, x):
-    return self.lin(x)
-
 class ClassificationTask(Task):
   def __init__(self, name, classes):
     Task.__init__(self, name)
@@ -54,8 +58,12 @@ class ClassificationTask(Task):
     self.default = torch.tensor(0, dtype=torch.int64)
 
   def create_heads(self, din):
+    head = nn.Linear(din, len(self.classes))
+    with torch.no_grad()
+      head.bias = logit(1.0 / len(self.classes))
+      head.weight.zero_()
     return {
-      self.name: LinearHead(din, len(self.classes))
+      self.name: head
     }
 
   def loss(self, predictions, batch):
@@ -115,9 +123,13 @@ class RegressionTask(Task):
     self._loss = nn.MSELoss(reduction='none')
 
   def create_heads(self, din):
+    head = nn.Linear(din, 1)
+    with torch.no_grad()
+      head.bias.zero_()
+      head.weight.zero_()
     return {
       self.name: nn.Sequential(
-        LinearHead(din, 1),
+        head,
         Reshape(-1),
       )
     }
