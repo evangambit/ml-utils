@@ -59,7 +59,7 @@ class ClassificationTask(Task):
 
   def create_heads(self, din):
     head = nn.Linear(din, len(self.classes))
-    with torch.no_grad()
+    with torch.no_grad():
       head.bias = logit(1.0 / len(self.classes))
       head.weight.zero_()
     return {
@@ -124,7 +124,7 @@ class RegressionTask(Task):
 
   def create_heads(self, din):
     head = nn.Linear(din, 1)
-    with torch.no_grad()
+    with torch.no_grad():
       head.bias.zero_()
       head.weight.zero_()
     return {
