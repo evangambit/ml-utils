@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-
+import torch.utils.data as tdata
 import numpy as np
 
 import math
@@ -34,6 +34,8 @@ class Task:
   def __init__(self, name):
     self.name = name
     self.default = None
+    self.gTaskId = Task.taskId
+    Task.taskId += 1
 
   def loss(self, predictions, batch):
     """
@@ -49,6 +51,7 @@ class Task:
     (int sample_size, float first_moment, float second_moment)
     """
     pass
+Task.taskId = 0
 
 class ClassificationTask(Task):
   def __init__(self, name, classes):
@@ -211,3 +214,33 @@ def hydra_resnet(resnet, tasks):
   )
   dim = resnet.layer4[-1].conv2.weight.shape[0]
   return HydraHeads(seq, dim, tasks)
+
+class ConcatedDataset(tdata.Dataset):
+  def __init__(self, *datasets):
+    super().__init__()
+    assert len(datasets) < 20, 'This class is not designed for large numbers of datasets'
+    self.datasets = datasets
+    self.tasks = {}
+    for dataset in datasets:
+      for task in dataset.tasks:
+        if task.name in self.tasks:
+          assert task.id == self.tasks[task.name].id, 'Duplicate task name found'
+        self.tasks[task.name] = task
+    self.tasks = list(self.task.values())
+
+  def __len__(self):
+    return sum(len(x) for x in self.datasets)
+  
+  def __getitem__(self, idx):
+    i = 0
+    while idx >= len(self.datasets[i]):
+      idx -= len(self.datasets[i])
+      i += 1
+    batch = self.datasets[i][idx]
+    for task in self.tasks:
+      if task.name not in batch:
+        batch[task.name] = task.default
+        batch[task.name + '?'] = torch.tensor(0.0)
+    return batch
+
+
