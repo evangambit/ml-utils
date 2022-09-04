@@ -104,15 +104,15 @@ class ResConv2d(nn.Module):
 
 class Resnet(models.ResNet):
   """
-  model = Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
+  model = ml_utils.Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
   model.load_state_dict(models.resnet.resnext50_32x4d(weights=models.resnet.ResNeXt50_32X4D_Weights).state_dict())
-  model.init(redset.tasks)
+  model.init(dataset.tasks)
   """
   def __init__(self, *args, **kwargs):
     super(Resnet, self).__init__(*args, **kwargs)
 
   def init(self, tasks):
-    emb_dim = model.fc.in_features
+    emb_dim = self.fc.in_features
     delattr(self, 'fc')
     self._heads = nn.ModuleDict()
     for task in tasks:

@@ -2,12 +2,26 @@ from torch.utils import data as tdata
 import numpy as np
 
 class DatasetWrapper(tdata.Dataset):
+  """
+  Can be used to convert a typical torchvision dataset to the format we expect.
+
+  dataset = datasets.MNIST(train = True)
+  dataset = DatasetWrapper(dataset, ['image', 'label'], transform=transforms.ToTensor())
+
+  print(dataset[0])
+  # {
+  #   "image": <1,28,28 Pytorch tensor>
+  #   "label": 4,
+  # }
+  """
   def __init__(self, dataset, args):
     super().__init__()
     self.dataset = dataset
     self.args = args
+
   def __getattr__(self, attr):
     return getattr(self.dataset, attr)
+
   def __getitem__(self, idx):
     A = self.dataset[self.indices[idx]]
     assert len(A) == len(self.args)

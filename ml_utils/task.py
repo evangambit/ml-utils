@@ -35,6 +35,7 @@ class Task:
   def __init__(self, name):
     self.name = name
     self.default = None
+    self.missing = None
     self.gTaskId = Task.taskId
     Task.taskId += 1
 
@@ -57,12 +58,14 @@ class Task:
   def plot_helper(A, smooth):
     time = np.array([a[0] for a in A])
     samplesize = [a[1] for a in A]
-    mom1 = np.array([a[2] for a in A]) * samplesize
-    mom2 = np.array([a[2] for a in A]) * samplesize
+    mom1 = np.array([a[2] for a in A])
+    mom2 = np.array([a[3] for a in A])
 
     N = uniform_filter1d(samplesize, smooth)
     avg = uniform_filter1d(mom1, smooth) / N
-    var = np.maximum(uniform_filter1d(mom2, smooth) - uniform_filter1d(mom1**2, smooth), 0.0) / N
+    var = np.maximum(
+      uniform_filter1d(mom2 * samplesize, smooth) - uniform_filter1d((mom1**2) * samplesize, smooth)
+    , 0.0) / N
 
     return (time, samplesize, avg, var)
 
@@ -74,6 +77,7 @@ class ClassificationTask(Task):
     self.classes = classes
     self._loss = nn.CrossEntropyLoss(reduction='none')
     self.default = torch.tensor(0, dtype=torch.int64)
+    self.missing = torch.tensor(0, dtype=torch.int64)
 
   def create_heads(self, din):
     head = nn.Linear(din, len(self.classes))
@@ -140,6 +144,7 @@ class RegressionTask(Task):
     self.avg = avg
     self.std = std
     self.default = torch.tensor(0.0, dtype=torch.float32)
+    self.missing = torch.tensor(0, dtype=torch.int64)
     self._loss = nn.MSELoss(reduction='none')
 
   def create_heads(self, din):
@@ -193,13 +198,14 @@ class RegressionTask(Task):
       ),
     }
 
-class DetectionTasks(ml_utils.task.Task):
+class DetectionTasks(Task):
   def __init__(self, name, classes):
-    ml_utils.task.Task.__init__(self, name)
-    assert isinstance(self.classes, list)
-    assert isinstance(self.classes[0], str)
+    Task.__init__(self, name)
+    assert isinstance(classes, list)
+    assert isinstance(classes[0], str)
     self.classes = classes
     self.default = torch.tensor([0.5] * len(classes), dtype=torch.float32)
+    self.missing = torch.tensor([0, 0, 0], dtype=torch.int64)
     self.logSigmoid = nn.LogSigmoid()
 
   def create_heads(self, din):
@@ -227,11 +233,9 @@ class DetectionTasks(ml_utils.task.Task):
     yhat = predictions[self.name]
     y = batch[self.name]
     mask = batch[self.name + '?']
-    if mask_sum == 0:
-      return {}
 
     # Compute two (batch_size x num_classes) matrices.
-    l = self._loss(yhat, y)
+    l = self._loss(predictions, batch)
     incorrect = (torch.round(torch.sigmoid(yhat)).to(torch.int64) != y).to(torch.float32)
 
     r = {}
@@ -241,14 +245,14 @@ class DetectionTasks(ml_utils.task.Task):
       r[f"{prefix}:{klass}:loss"] = (
         it,
         n,
-        float((l[:,i] * mask).sum()) * inv_n,
-        float(((l[:,i]**2) * mask).sum()) * inv_n,
+        float((l[:,i] * mask[:,i]).sum()) * inv_n,
+        float(((l[:,i]**2) * mask[:,i]).sum()) * inv_n,
       )
       r[f"{prefix}:{klass}:error"] = (
         it,
         n,
-        float((l[:,i] * incorrect).sum()) * inv_n,
-        float(((l[:,i]**2) * incorrect).sum()) * inv_n,
+        float((l[:,i] * incorrect[:,i]).sum()) * inv_n,
+        float(((l[:,i]**2) * incorrect[:,i]).sum()) * inv_n,
       )
 
     return r
@@ -278,7 +282,7 @@ class ConcatedDataset(tdata.Dataset):
     for task in self.tasks:
       if task.name not in batch:
         batch[task.name] = task.default
-        batch[task.name + '?'] = torch.tensor(0.0)
+        batch[task.name + '?'] = task.missing
     return batch
 
 
