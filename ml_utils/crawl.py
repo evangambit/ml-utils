@@ -1,17 +1,8 @@
 import os
-import time
-import requests
-import sqlite3
-from urllib.parse import urlparse
-from urllib.parse import urldefrag
-
-import os
 import re
 import sqlite3
 import time
 from urllib.parse import urldefrag, urlparse
-
-from requests_html import HTMLSession
 
 class Throttler:
   def __init__(self, qps):
@@ -52,6 +43,8 @@ while crawler.scrape():
 """
 class CreepyCrawly:
   def __init__(self, dirname : str, qps : float, seedUrls : [str] = [], commitEvery : int = 1):
+    # Import this here to avoid having to install this heavy and rare dependency.
+    from requests_html import HTMLSession
     self.it = 0
     self.commitEvery = commitEvery
     self.dirname = dirname
