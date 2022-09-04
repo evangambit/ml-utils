@@ -17,6 +17,11 @@ class DatasetWrapper(tdata.Dataset):
     return R
 
 class OverlappingSampler(tdata.Sampler):
+  """
+  This sampler reuses a certain amount of each batch. You can use this with
+  CachingDataset to significantly speed up the dataloading for each batch, at
+  the cost of repeating datapoints.
+  """
   def __init__(self, dataset, batch_size, step_size = None) -> None:
     self.indices = np.arange(len(dataset))
     np.random.shuffle(self.indices)
@@ -38,33 +43,49 @@ class OverlappingSampler(tdata.Sampler):
 
 from functools import lru_cache
 class CachingDataset(tdata.Dataset):
-  def __init__(self, dataset):
+  """
+  This sampler caches items from a dataset. Note that it does *not* reapply
+  transforms, in fitting with our philosophy that transforms should live apart
+  from datasets.
+  """
+  def __init__(self, dataset : tdata.Dataset, cache_size : int = 512):
     super().__init__()
-    self.dataset = dataset
+    self._dataset = dataset
+    self._getitem = lru_cache(maxsize = cache_size)(lambda idx: self._dataset[idx])
 
   def __getattr__(self, attr):
-    return getattr(self.dataset, attr)
+    return getattr(self._dataset, attr)
 
   def __len__(self):
-    return len(self.dataset)
+    return len(self._dataset)
 
-  @lru_cache(maxsize = 512)
   def __getitem__(self, idx):
-    return self.dataset[idx]
+    return self._getitem(idx)
 
 class Subdataset(tdata.Dataset):
   def __init__(self, dataset, indices):
     super().__init__()
-    self.dataset = dataset
-    self.indices = indices
+    self._dataset = dataset
+    self._indices = indices
   def __getattr__(self, attr):
-    return getattr(self.dataset, attr)
+    return getattr(self._dataset, attr)
   def __len__(self):
-    return self.indices.shape[0]
+    return self._indices.shape[0]
   def __getitem__(self, idx):
-    return self.dataset[self.indices[idx]]
+    return self._dataset[self._indices[idx]]
 
 def interweaver(*A):
+  """
+  Merges multiple data loaders and loops over them endlessly.
+
+  Example:
+
+  # Run 1 test batch every 5 training batches.
+  for split, (x, y) in interweaver(
+    ("train", 5, trainloader),
+    ("test", 1, testloader),
+    ):
+  """
   n = len(A)
   names = [a[0] for a in A]
   steps = [a[1] for a in A]

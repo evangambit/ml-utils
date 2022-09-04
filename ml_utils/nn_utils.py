@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torchvision import models
 
 class Mean(nn.Module):
   def __init__(self, *axes):
@@ -67,12 +68,12 @@ class GaussianBlur2d(nn.Module):
     return nn.functional.conv2d(x, self.w, padding=self.padding, groups=self.w.shape[0])
 
 class ResConv2d(nn.Module):
-  def __init__(self, cin, cout, stride=1):
+  def __init__(self, cin, cout, stride=1, gate1=nn.LeakyReLU, gate2=nn.LeakyReLU):
     super(ResConv2d, self).__init__()
     self.seq = nn.Sequential(
       nn.Conv2d(cin, cout, 3, padding=1, stride=stride),
       nn.BatchNorm2d(cout),
-      nn.LeakyReLU(),
+      gate1(),
       nn.Conv2d(cout, cout, 3, padding=1),
       nn.BatchNorm2d(cout),
     )
@@ -91,7 +92,7 @@ class ResConv2d(nn.Module):
         nn.Conv2d(cin, cout, 1, 1, 0),
         nn.BatchNorm2d(cout),
       )
-    self.gate = nn.LeakyReLU()
+    self.gate = gate2()
 
   def forward(self, x):
     out = self.seq(x)
@@ -100,3 +101,45 @@ class ResConv2d(nn.Module):
     else:
       out += x
     return self.gate(out)
+
+class Resnet(models.ResNet):
+  """
+  model = Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
+  model.load_state_dict(models.resnet.resnext50_32x4d(weights=models.resnet.ResNeXt50_32X4D_Weights).state_dict())
+  model.init(redset.tasks)
+  """
+  def __init__(self, *args, **kwargs):
+    super(Resnet, self).__init__(*args, **kwargs)
+
+  def init(self, tasks):
+    emb_dim = model.fc.in_features
+    delattr(self, 'fc')
+    self._heads = nn.ModuleDict()
+    for task in tasks:
+      task_heads = task.create_heads(emb_dim)
+      for head_name in task_heads:
+        self._heads[head_name] = task_heads[head_name]
+
+  def embed(self, x):
+    assert x.shape[1:] == (3, 224, 224), f"{x.shape}"
+    x = (x - 0.449) / 0.226
+    x = self.conv1(x)
+    x = self.bn1(x)
+    x = self.relu(x)
+    x = self.maxpool(x)
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.layer3(x)
+    x = self.layer4(x)
+    x = self.avgpool(x)
+    x = torch.flatten(x, 1)
+    return x
+  
+  def head(self, x):
+    r = {}
+    for headName in self._heads:
+      r[headName] = self._heads[headName](x)
+    return r
+
+  def forward(self, x):
+    return self.head(self.embed(x))

@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import torch.utils.data as tdata
 import numpy as np
+from scipy.ndimage import uniform_filter1d
 
 import math
 
@@ -51,6 +52,20 @@ class Task:
     (int sample_size, float first_moment, float second_moment)
     """
     pass
+
+  @staticmethod
+  def plot_helper(A, smooth):
+    time = np.array([a[0] for a in A])
+    samplesize = [a[1] for a in A]
+    mom1 = np.array([a[2] for a in A]) * samplesize
+    mom2 = np.array([a[2] for a in A]) * samplesize
+
+    N = uniform_filter1d(samplesize, smooth)
+    avg = uniform_filter1d(mom1, smooth) / N
+    var = np.maximum(uniform_filter1d(mom2, smooth) - uniform_filter1d(mom1**2, smooth), 0.0) / N
+
+    return (time, samplesize, avg, var)
+
 Task.taskId = 0
 
 class ClassificationTask(Task):
@@ -178,42 +193,65 @@ class RegressionTask(Task):
       ),
     }
 
-class HydraHeads(nn.Module):
-  def __init__(self, backbone, dim, tasks):
-    super().__init__()
-    self.backbone = backbone
-    self.heads = nn.ModuleDict()
-    for task in tasks:
-      heads = task.create_heads(dim)
-      for k in heads:
-        self.heads[k] = heads[k]
+class DetectionTasks(ml_utils.task.Task):
+  def __init__(self, name, classes):
+    ml_utils.task.Task.__init__(self, name)
+    assert isinstance(self.classes, list)
+    assert isinstance(self.classes[0], str)
+    self.classes = classes
+    self.default = torch.tensor([0.5] * len(classes), dtype=torch.float32)
+    self.logSigmoid = nn.LogSigmoid()
 
-  def forward(self, x):
-    z = self.backbone((x - 0.449) / .226)
+  def create_heads(self, din):
+    head = nn.Linear(din, len(self.classes))
+    with torch.no_grad():
+      head.bias.zero_()
+      head.weight.zero_()
+    return {
+      self.name: head
+    }
+
+  def _loss(self, predictions, batch):
+    yhat = predictions[self.name]
+    y = batch[self.name]
+    assert yhat.shape == y.shape
+    return y * self.logSigmoid(yhat) + (1 - y) * self.logSigmoid(-yhat)
+
+  def loss(self, predictions, batch):
+    l = self._loss(predictions, batch)
+    mask = batch[self.name + '?']
+    loss_per_class = (l * mask).sum(0) * torch.nan_to_num(1.0 / mask.sum(0), posinf=0.0)
+    return loss_per_class.sum()
+
+  def metrics(self, predictions, batch, it, prefix = ''):
+    yhat = predictions[self.name]
+    y = batch[self.name]
+    mask = batch[self.name + '?']
+    if mask_sum == 0:
+      return {}
+
+    # Compute two (batch_size x num_classes) matrices.
+    l = self._loss(yhat, y)
+    incorrect = (torch.round(torch.sigmoid(yhat)).to(torch.int64) != y).to(torch.float32)
+
     r = {}
-    for k in self.heads:
-      r[k] = self.heads[k](z)
-    return r
+    for i, klass in enumerate(self.classes):
+      n = int(mask[:,i].sum())
+      inv_n = 0.0 if n == 0 else 1.0 / n
+      r[f"{prefix}:{klass}:loss"] = (
+        it,
+        n,
+        float((l[:,i] * mask).sum()) * inv_n,
+        float(((l[:,i]**2) * mask).sum()) * inv_n,
+      )
+      r[f"{prefix}:{klass}:error"] = (
+        it,
+        n,
+        float((l[:,i] * incorrect).sum()) * inv_n,
+        float(((l[:,i]**2) * incorrect).sum()) * inv_n,
+      )
 
-def hydra_resnet(resnet, tasks):
-  """
-  Given a torchvision resnet model and a list of tasks, creates
-  a hydranet from the list of tasks.
-  """
-  seq = nn.Sequential(
-    resnet.conv1,
-    resnet.bn1,
-    resnet.relu,
-    resnet.maxpool,
-    resnet.layer1,
-    resnet.layer2,
-    resnet.layer3,
-    resnet.layer4,
-    resnet.avgpool,
-    BatchReshape(-1),
-  )
-  dim = resnet.layer4[-1].conv2.weight.shape[0]
-  return HydraHeads(seq, dim, tasks)
+    return r
 
 class ConcatedDataset(tdata.Dataset):
   def __init__(self, *datasets):
