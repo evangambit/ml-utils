@@ -11,10 +11,10 @@ class Logger:
     self.logsSinceLastWrite = 0
     self.A = {}
 
-  def log(self, name, x, y):
+  def log(self, name, x, y, n = 1):
     if name not in self.A:
       self.A[name] = []
-    self.A[name].append((x, y))
+    self.A[name].append((x, y, n))
     self.logsSinceLastWrite += 1
     if self.logsSinceLastWrite >= self._logsPerWrite:
       self._write()
@@ -36,7 +36,7 @@ class LoggerFamily:
     self.logsSinceLastWrite = 0
     self.loggers = {}
 
-  def log(self, run, name, x, y):
+  def log(self, run, *args, **kwargs):
     if run not in self.loggers:
       self.loggers[run] = Logger(os.path.join(self.path, run), logsPerWrite=self._logsPerWrite)
-    self.loggers[run].log(name, x, y)
+    self.loggers[run].log(*args, **kwargs)

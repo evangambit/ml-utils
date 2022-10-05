@@ -28,6 +28,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
       self._send_text(json.dumps({
         "x": [l[0] for l in lines],
         "y": [l[1] for l in lines],
+        "n": [l[2] for l in lines],
         "runName": params["run"][0],
         "metricName": params["metric"][0],
       }), 200)
