@@ -65,9 +65,9 @@ class Task:
 
 Task.taskId = 0
 
-class ClassificationTask(ml_utils.task.Task):
+class ClassificationTask(Task):
   def __init__(self, name, classes):
-    ml_utils.task.Task.__init__(self, name)
+    Task.__init__(self, name)
     self.classes = classes
     self._loss = nn.CrossEntropyLoss(reduction='none')
     self.default = torch.tensor(0, dtype=torch.int64)
@@ -76,7 +76,7 @@ class ClassificationTask(ml_utils.task.Task):
   def create_heads(self, din):
     head = nn.Linear(din, len(self.classes))
     with torch.no_grad():
-      b = ml_utils.task.logit(1.0 / len(self.classes))
+      b = logit(1.0 / len(self.classes))
       head.bias.zero_()
       head.bias += b
       head.weight.zero_()
@@ -168,9 +168,9 @@ class RegressionTask(Task):
     logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
 
-class DetectionTask(ml_utils.task.Task):
+class DetectionTask(Task):
   def __init__(self, name, classes):
-    ml_utils.task.Task.__init__(self, name)
+    Task.__init__(self, name)
     assert isinstance(self.classes, list)
     assert isinstance(self.classes[0], str)
     self.classes = classes
