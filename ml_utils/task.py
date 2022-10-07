@@ -45,13 +45,7 @@ class Task:
     """
     pass
 
-  def metrics(self, predictions, batch, it, prefix = ''):
-    """
-    Returns a dictionary where keys are strings
-    and values are tuples of the form
-
-    (int sample_size, float first_moment, float second_moment)
-    """
+  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
     pass
 
   @staticmethod
@@ -71,9 +65,9 @@ class Task:
 
 Task.taskId = 0
 
-class ClassificationTask(Task):
+class ClassificationTask(ml_utils.task.Task):
   def __init__(self, name, classes):
-    Task.__init__(self, name)
+    ml_utils.task.Task.__init__(self, name)
     self.classes = classes
     self._loss = nn.CrossEntropyLoss(reduction='none')
     self.default = torch.tensor(0, dtype=torch.int64)
@@ -82,7 +76,7 @@ class ClassificationTask(Task):
   def create_heads(self, din):
     head = nn.Linear(din, len(self.classes))
     with torch.no_grad():
-      b = logit(1.0 / len(self.classes))
+      b = ml_utils.task.logit(1.0 / len(self.classes))
       head.bias.zero_()
       head.bias += b
       head.weight.zero_()
@@ -102,32 +96,20 @@ class ClassificationTask(Task):
       return 0.0
     return (l * mask).sum() / mask_sum
 
-  def metrics(self, predictions, batch, it, prefix = ''):
+  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
     yhat = predictions[self.name]
     y = batch[self.name]
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
     if mask_sum == 0:
-      return {}
+      return
 
     l = self._loss(yhat, y)
-
     incorrect = (yhat.argmax(1) != y).to(torch.float32)
 
-    return {
-      f"{prefix}:{self.name}:loss": (
-        it,
-        mask_sum,
-        float((l * mask).sum()) / mask_sum,
-        float((l * l * mask).sum()) / mask_sum,
-      ),
-      f"{prefix}:{self.name}:error": (
-        it,
-        mask_sum,
-        float((incorrect * mask).sum()) / mask_sum,
-        float((incorrect * mask).sum()) / mask_sum,
-      ),
-    }
+    logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
+    logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+
 
 class RegressionTask(Task):
   """
@@ -171,42 +153,28 @@ class RegressionTask(Task):
       return 0.0
     return (l * mask).sum() / mask_sum
 
-  def metrics(self, predictions, batch, it, prefix = ''):
+  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
     yhat = predictions[self.name]
     y = (batch[self.name] - self.avg) / self.std
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
     if mask_sum == 0:
-      return {}
+      return
 
     l = self._loss(yhat, y)
-
     incorrect = (torch.abs(yhat - y) > 1.0).to(torch.float32)
 
-    return {
-      f"{prefix}:{self.name}:loss": (
-        it,
-        mask_sum,
-        float((l * mask).sum()) / mask_sum,
-        float((l * l * mask).sum()) / mask_sum,
-      ),
-      f"{prefix}:{self.name}:wrong": (
-        it,
-        mask_sum,
-        float((incorrect * mask).sum()) / mask_sum,
-        float((incorrect * mask).sum()) / mask_sum,
-      ),
-    }
+    logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
+    logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
-class DetectionTasks(Task):
+
+class DetectionTask(ml_utils.task.Task):
   def __init__(self, name, classes):
-    Task.__init__(self, name)
-    assert isinstance(classes, list)
-    assert isinstance(classes[0], str)
+    ml_utils.task.Task.__init__(self, name)
+    assert isinstance(self.classes, list)
+    assert isinstance(self.classes[0], str)
     self.classes = classes
-    self.default = torch.tensor([0.5] * len(classes), dtype=torch.float32)
-    self.missing = torch.tensor([0, 0, 0], dtype=torch.int64)
-    self.logSigmoid = nn.LogSigmoid()
+    self.default = torch.tensor(0.5, dtype=torch.float32)
 
   def create_heads(self, din):
     head = nn.Linear(din, len(self.classes))
@@ -217,45 +185,33 @@ class DetectionTasks(Task):
       self.name: head
     }
 
-  def _loss(self, predictions, batch):
+  def loss(self, predictions, batch):
     yhat = predictions[self.name]
     y = batch[self.name]
     assert yhat.shape == y.shape
-    return y * self.logSigmoid(yhat) + (1 - y) * self.logSigmoid(-yhat)
-
-  def loss(self, predictions, batch):
-    l = self._loss(predictions, batch)
     mask = batch[self.name + '?']
-    loss_per_class = (l * mask).sum(0) * torch.nan_to_num(1.0 / mask.sum(0), posinf=0.0)
-    return loss_per_class.sum()
+    mask_sum = float(mask.sum())
 
-  def metrics(self, predictions, batch, it, prefix = ''):
+    l = y * torch.log(yhat) + (1 - y) * torch.log(1 - yhat)
+
+    if mask_sum == 0.0:
+      return 0.0
+    return (l * mask).sum() / mask_sum
+
+  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
     yhat = predictions[self.name]
     y = batch[self.name]
     mask = batch[self.name + '?']
+    mask_sum = int(mask.sum())
+    if mask_sum == 0:
+      return
 
-    # Compute two (batch_size x num_classes) matrices.
-    l = self._loss(predictions, batch)
-    incorrect = (torch.round(torch.sigmoid(yhat)).to(torch.int64) != y).to(torch.float32)
+    l = self._loss(yhat, y)
+    incorrect = (yhat.argmax(1) != y).to(torch.float32)
 
-    r = {}
-    for i, klass in enumerate(self.classes):
-      n = int(mask[:,i].sum())
-      inv_n = 0.0 if n == 0 else 1.0 / n
-      r[f"{prefix}:{klass}:loss"] = (
-        it,
-        n,
-        float((l[:,i] * mask[:,i]).sum()) * inv_n,
-        float(((l[:,i]**2) * mask[:,i]).sum()) * inv_n,
-      )
-      r[f"{prefix}:{klass}:error"] = (
-        it,
-        n,
-        float((l[:,i] * incorrect[:,i]).sum()) * inv_n,
-        float(((l[:,i]**2) * incorrect[:,i]).sum()) * inv_n,
-      )
+    logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
+    logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
-    return r
 
 class ConcatedDataset(tdata.Dataset):
   def __init__(self, *datasets):
