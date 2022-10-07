@@ -53,7 +53,7 @@ class LoggerFamily:
     self.loggers = {}
     self._kwargs = {
       "logsPerWrite": logsPerWrite,
-      "aggregate": aggregate,
+      "sampleSizeToAggregate": sampleSizeToAggregate,
     }
 
   def log(self, run, metricName, x, y, n : float = 1.0):
