@@ -34,7 +34,6 @@ class Logger:
           float(a[1] / a[2]),
           float(a[2]),
         ])
-        print(t)
         f.write(t + "\n")
     self.logs[metricName] = []
 
