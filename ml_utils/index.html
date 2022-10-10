@@ -1,0 +1,634 @@
+<html>
+<head>
+<style>
+html, body {
+  background: white;
+  color: black;
+  margin: 0;
+  padding: 0;
+}
+.bar {
+  border-bottom: solid black 1px;
+  display: flex;
+  flex-direction: row;
+  padding: 0.5em 0;
+}
+.bar > * {
+  margin-left: 0.5em;
+}
+canvas {
+  border: solid white 1px;
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let svg = {
+  svg: (width, height, attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    rtn.setAttribute("viewBox", "0 0 " + width + " " + height);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  g: (attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+
+  // Shapes
+  rect: (x, y, width, height, attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rtn.setAttribute("x", x);
+    rtn.setAttribute("y", y);
+    rtn.setAttribute("width", width);
+    rtn.setAttribute("height", height);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  circle: (cx, cy, r, attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    rtn.setAttribute("cx", cx);
+    rtn.setAttribute("cy", cy);
+    rtn.setAttribute("r", r);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  ellipse: (cx, cy, rx, ry, attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+    rtn.setAttribute("cx", cx);
+    rtn.setAttribute("cy", cy);
+    rtn.setAttribute("rx", rx);
+    rtn.setAttribute("ry", ry);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  polygon: (xs, ys, attrs={}) => {
+    if (xs.length != ys.length) return undefined;
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    let pointString = "";
+    for (let i = 0; i < xs.length; ++i) {
+      if (i != 0) pointString += " ";
+      pointString += xs[i] + "," + ys[i];
+    }
+    rtn.setAttribute("points", pointString);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+
+  // Paths
+  line: (x1, y1, x2, y2, attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    rtn.setAttribute("x1", x1);
+    rtn.setAttribute("y1", y1);
+    rtn.setAttribute("x2", x2);
+    rtn.setAttribute("y2", y2);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  path: (attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    let _append = (pathElement, moveType, newValues=undefined) => {
+      let value = pathElement.getAttribute("d");
+      if (value) {
+        value += " "
+      } else {
+        value = "";
+      }
+      value += moveType;
+      if (newValues) {
+        value += " ";
+        value += newValues.join(",");
+      }
+      rtn.setAttribute("d", value);
+    }
+    rtn.moveTo = (x, y) => {                                                _append(rtn, "M", [x, y]);                                                 };
+    rtn.lineTo = (x, y) => {                                                _append(rtn, "L", [x, y]);                                                 };
+    rtn.curveTo = (x1, y1, x2, y2, x3, y4) => {                             _append(rtn, "L", [x1, y1, x2, y2, x3, y3]);                               };
+    rtn.smoothCurveTo = (x1, y1, x2, y2) => {                               _append(rtn, "S", [x1, y1, x2, y2]);                                       };
+    rtn.quadraticTo = (x1, y1, x2, y2) => {                                 _append(rtn, "Q", [x1, y1, x2, y2]);                                       };
+    rtn.smoothQuadraticTo = (x, y) => {                                     _append(rtn, "T", [x, y]);                                                 };
+    rtn.arcTo = (rx, ry, xAxisRotation, largeArcFlag, sweepFlag, x, y) => { _append(rtn, "A", [rx, ry, xAxisRotation, largeArcFlag, sweepFlag, x, y]); };
+    rtn.close = () => {                                                     _append(rtn, "Z");                                                         };
+    rtn.setAttribute("fill", "none");
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  polyline: (xs, ys, attrs={}) => {
+    if (xs.length != ys.length) return undefined;
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    let pointString = "";
+    for (let i = 0; i < xs.length; ++i) {
+      if (i != 0) pointString += " ";
+      pointString += xs[i] + "," + ys[i];
+    }
+    rtn.setAttribute("points", pointString);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+
+  // Other
+  linearGradient: (attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+    rtn.addStop = (offset, color, opacity=1, attrs={}) => {
+      let rtn = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+      rtn.setAttribute("offset", offset);
+      rtn.setAttribute("color", color);
+      rtn.setAttribute("opacity", opacity);
+      for (key in attrs) rtn.setAttribute(key, attrs[key]);
+      return rtn;
+    };
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  radientGradient: (attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "radientGradient");
+    rtn.addStop = (offset, color, opacity=1, attrs={}) => {
+      let rtn = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+      rtn.setAttribute("offset", offset);
+      rtn.setAttribute("color", color);
+      rtn.setAttribute("opacity", opacity);
+      for (key in attrs) rtn.setAttribute(key, attrs[key]);
+      return rtn;
+    };
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  text: (str, x, y, attrs={}) => {
+    // Useful Attributes:
+    //   text-anchor = "start", "middle", "end"
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    rtn.setAttribute("x", x);
+    rtn.setAttribute("y", y);
+    rtn.innerHTML = str;
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  },
+  image: (src, x, y, attrs={}) => {
+    let rtn = document.createElementNS("http://www.w3.org/2000/svg", "image");
+    rtn.setAttributeNS('http://www.w3.org/1999/xlink','href', src);
+    rtn.setAttribute("x", x);
+    rtn.setAttribute("y", y);
+    for (key in attrs) rtn.setAttribute(key, attrs[key]);
+    return rtn;
+  }
+};
+
+function min(A) {
+  return A.reduce((a, b) => Math.min(a, b), Infinity);
+}
+
+function max(A) {
+  return A.reduce((a, b) => Math.max(a, b), -Infinity);
+}
+
+class Dataset extends EventTarget {
+  bounds() {}
+}
+
+class ScatterModel extends Dataset {
+  constructor(runName, metricName, X, Y) {
+    super();
+    this.runName = runName;
+    this.metricName = metricName;
+    this._X = (X instanceof Array) ? new Float64Array(X) : X;
+    this._Y = (Y instanceof Array) ? new Float64Array(Y) : Y;
+    this._smooth = 0;
+    this._maxClip = 0;
+
+    this._X1 = null;
+    this._Y1 = null;
+    this._needsUpdate = true;
+  }
+  get X() {
+    if (this._needsUpdate) {
+      this._update();
+    }
+    return this._X1;
+  }
+  get Y() {
+    if (this._needsUpdate) {
+      this._update();
+    }
+    return this._Y1;
+  }
+  _update() {
+    this._X1 = smooth(this._X, this._smooth);
+    this._Y1 = smooth(this._Y, this._smooth);
+    this._needsUpdate = false;
+  }
+  set smooth(val) {
+    this._smooth = val;
+    this._needsUpdate = true;
+    this.dispatchEvent(new Event('data-changed'));
+  }
+  set maxClip(val) {
+    this._maxClip = Math.max(0, Math.min(1, val));
+    this._needsUpdate = true;
+    this.dispatchEvent(new Event('data-changed'));
+  }
+  bounds() {
+    if (this._needsUpdate) {
+      this._update();
+    }
+    let a = percentile(this.Y, 1 - this._maxClip);
+    return {
+      "minx": min(this.X),
+      "miny": min(this.Y),
+      "maxx": max(this.X),
+      "maxy": a,
+    };
+  }
+}
+
+function range(low, high) {
+  let r = new Float64Array(high - low);
+  for (let i = low; i < high; ++i) {
+    r[i] = i;
+  }
+  return r;
+}
+
+function percentile(A, p) {
+  // TODO: use O(n) selction algorithm?
+  A = new Float64Array(A);
+  A.sort();
+  return A[Math.round((A.length - 1) * p)];
+}
+
+function smooth(A, radius) {
+  if (radius === 0) {
+    return A;
+  }
+  let S = new Float64Array(A.length + 1);
+  S[0] = 0;
+  for (let i = 0; i < A.length; ++i) {
+    S[i + 1] = S[i] + A[i];
+  }
+
+  let R = new Float64Array(A.length);
+  for (let i = 0; i < A.length; ++i) {
+    let a = Math.max(0, i - radius);
+    let b = Math.min(A.length - 1, i + radius + 1);
+    R[i] = (S[b] - S[a]) / (b - a);
+  }
+
+  return R;
+}
+
+function get_metrics(dirName) {
+  return window.fetch('./api/get_runs?dir=' + encodeURIComponent(dirName))
+  .then(r => r.json())
+  .then(runNames => {
+    let runsToShow = runsInput.value.replace(/\s/g, "").split(',');
+    let runPromises = [];
+    for (let runName of runNames) {
+      if (!runsToShow.includes(runName)) {
+        continue;
+      }
+      let url = './api/get_families?dir=' + encodeURIComponent(dirName);
+      url += '&run=' + encodeURIComponent(runName);
+      runPromises.push(
+        window.fetch(url)
+        .then(r => r.json())
+        .then(metricNames => {
+          let metricPromises = [];
+          for (let metricName of metricNames) {
+            let url = './api/get_data?dir=' + encodeURIComponent(dirName);
+            url += '&run=' + encodeURIComponent(runName);
+            url += '&metric=' + encodeURIComponent(metricName);
+            metricPromises.push(window.fetch(url).then(r => r.json()));
+          }
+          return Promise.all(metricPromises);
+        })
+      );
+    }
+    return Promise.all(runPromises);
+  }).then(runs => {
+    let metrics = {};
+    for (let run of runs) {
+      for (let metric of run) {
+        if (!(metric["metricName"] in metrics)) {
+          metrics[metric["metricName"]] = [];
+        }
+        metrics[metric["metricName"]].push(metric)
+      }
+    }
+    return metrics;
+  })
+}
+
+class MrChartModel extends EventTarget {
+  constructor(title) {
+    super();
+    this.title = title;
+    this._datasets = [];
+  }
+  get datasets() {
+    return this._datasets;
+  }
+  add_dataset(dataset) {
+    this._datasets.push(dataset);
+    dataset.parent = this;
+    dataset.addEventListener('data-changed', (e) => {
+      this.dispatchEvent(new Event('data-changed', {"detail": e.detail}));
+    })
+    this.dispatchEvent(new Event('data-changed', {"detail": null, "bubbles": true}));
+  }
+}
+
+function tickStepFromWidth(width) {
+  // Code is dumb. Results are fine.
+  const kDesiredNumberOfTicks = 8;
+  let guess = Math.pow(10, Math.round(Math.log(width) / Math.log(10)) - 1);
+  let guesses = [
+    guess * 0.1,
+    guess * 0.2,
+    guess * 0.5,
+    guess * 1,
+    guess * 2,
+    guess * 5,
+    guess * 10,
+  ];
+  let A = guesses.map(x => [x, Math.abs(Math.floor(width / x) - kDesiredNumberOfTicks)]);
+  A.sort((a, b) => a[1] - b[1]);
+  return A[0][0];
+}
+
+function num2str(n) {
+  if (Math.abs(n) < 1e-10) {
+    return "0";
+  }
+  return n.toPrecision(2);
+}
+
+class MrChart extends HTMLElement {
+  constructor(model) {
+    super();
+    this.model = model;
+    this.style.display = 'block';
+    this.model.addEventListener('data-changed', () => {
+      this.render();
+    });
+    this.cvs = document.createElement('CANVAS');
+    this.cvs.style.border = 'solid black 1px';
+    this.ctx = this.cvs.getContext('2d');
+    this._ignoreEvents = false;
+  }
+  connectedCallback() {
+    this.appendChild(this.cvs);
+  }
+  transact(fn) {
+    this._ignoreEvents = true;
+    fn(this);
+    this._ignoreEvents = false;
+    this.render();
+  }
+  render() {
+    if (this._ignoreEvents) {
+      return;
+    }
+    const leftPadding = 40.5;
+    const topPadding = 40.5;
+    const botPadding = 40;
+    const rightPadding = 20;
+    const graphExternalWidth = 320;
+    const graphExternalHeight = 240;
+    this.cvs.width = leftPadding + graphExternalWidth + rightPadding;
+    this.cvs.height = topPadding + graphExternalHeight + botPadding;
+
+    // Compute bounds
+    let bounds = {
+      "minx": Infinity,
+      "miny": Infinity,
+      "maxx": -Infinity,
+      "maxy": -Infinity,
+    };
+    for (let dataset of this.model.datasets) {
+      let b = dataset.bounds();
+      bounds["minx"] = Math.min(bounds["minx"], b["minx"]);
+      bounds["miny"] = Math.min(bounds["miny"], b["miny"]);
+      bounds["maxx"] = Math.max(bounds["maxx"], b["maxx"]);
+      bounds["maxy"] = Math.max(bounds["maxy"], b["maxy"]);
+    }
+
+    let width = bounds["maxx"] - bounds["minx"];
+    let height = bounds["maxy"] - bounds["miny"];
+    bounds["minx"] -= width * 0.05;
+    bounds["maxx"] += width * 0.05;
+    bounds["miny"] -= height * 0.05;
+    bounds["maxy"] += height * 0.05;
+
+    function f(x, y) {
+      x = (x - bounds["minx"]) / (bounds["maxx"] - bounds["minx"]);
+      y = (y - bounds["miny"]) / (bounds["maxy"] - bounds["miny"]);
+      x = x * graphExternalWidth + leftPadding;
+      y = (1 - y) * graphExternalHeight + topPadding;
+      return [x, y];
+    }
+
+    {
+      let yStep = tickStepFromWidth(bounds["maxy"] - bounds["miny"]);
+      let yGridLow = Math.floor(bounds["miny"] / yStep) * yStep;
+      let yGridHigh = Math.ceil(bounds["maxy"] / yStep) * yStep;
+      this.ctx.fillStyle = "#888";
+      this.ctx.strokeStyle = '#888';
+      this.ctx.textAlign = "right";
+      for (let y = yGridLow; y <= yGridHigh; y += yStep) {
+        let yScreen = f(0, y)[1];
+        if (yScreen < topPadding || yScreen > topPadding + graphExternalHeight) {
+          continue;
+        }
+        this.ctx.beginPath();
+        this.ctx.moveTo(leftPadding, yScreen);
+        this.ctx.lineTo(leftPadding + graphExternalWidth, yScreen);
+        this.ctx.stroke();
+        this.ctx.fillText(num2str(y), leftPadding - 4, yScreen + 4);
+      }
+    }
+    {
+      let xStep = tickStepFromWidth(bounds["maxx"] - bounds["minx"]);
+      let xGridLow = Math.ceil(bounds["minx"] / xStep) * xStep;
+      let xGridHigh = Math.floor(bounds["maxx"] / xStep) * xStep;
+      this.ctx.fillStyle = "#888";
+      this.ctx.strokeStyle = '#888';
+      this.ctx.textAlign = "rights";
+      for (let x = xGridLow; x <= xGridHigh; x += xStep) {
+        let xScreen = f(x, 0)[0];
+        if (xScreen < leftPadding || xScreen > leftPadding + graphExternalWidth) {
+          continue;
+        }
+        this.ctx.beginPath();
+        this.ctx.moveTo(xScreen, topPadding);
+        this.ctx.lineTo(xScreen, topPadding + graphExternalHeight);
+        this.ctx.stroke()
+        this.ctx.save();
+        this.ctx.rotate(-Math.PI / 2);
+        this.ctx.fillText(num2str(x), -(graphExternalHeight + topPadding + 4), xScreen + 4);
+        this.ctx.restore();
+      }
+    }
+
+    const colors = [
+      'rgb(  0,  89, 144)',
+      'rgb(220,  95,   0)',
+      'rgb(  0, 128,  24)',
+      'rgb(180,   0,   1)',
+      'rgb(116,  73, 153)',
+      'rgb(108,  56,  47)',
+      'rgb(192,  88, 158)',
+    ];
+    let offscreen = document.createElement('CANVAS');
+    offscreen.width = graphExternalWidth;
+    offscreen.height = graphExternalHeight;
+    let oc = offscreen.getContext('2d');
+    for (let i in this.model.datasets) {
+      let dataset = this.model.datasets[i];
+      oc.fillStyle = colors[i % colors.length];
+      oc.strokeStyle = colors[i % colors.length];
+      if (dataset instanceof ScatterModel) {
+        let X = dataset.X;
+        let Y = dataset.Y;
+        // for (let i = 0; i < X.length; ++i) {
+        //   let [x, y] = f(X[i], Y[i]);
+        //   this.ctx.beginPath();
+        //   this.ctx.arc(x, y, 1, 0, 6.28, false);
+        //   this.ctx.fill();
+        // }
+        oc.beginPath();
+        for (let i = 0; i < X.length; ++i) {
+          let [x, y] = f(X[i], Y[i]);
+          x -= leftPadding;
+          y -= topPadding;
+          if (i === 0) {
+            oc.moveTo(x, y);
+          } else {
+            oc.lineTo(x, y);
+          }
+        }
+        oc.stroke();
+      } else {
+        throw Error('');
+      }
+    }
+
+    // Draw key
+    const keyPadding = 4;
+    const lineHeight = 16;
+    let keyWidth = 0;
+    let keyHeight = 0;
+    oc.font = '16px Arial';
+    for (let i in this.model.datasets) {
+      let dataset = this.model.datasets[i];
+      keyWidth = Math.max(keyWidth, oc.measureText(dataset.runName).width);
+      keyHeight += lineHeight;
+    }
+    keyWidth += 14;
+    keyHeight += lineHeight / 2;
+    oc.fillStyle = 'white';
+    oc.strokeStyle = 'black';
+    oc.fillRect(
+      offscreen.width - keyWidth - keyPadding * 2, keyPadding, keyWidth, keyHeight);
+    oc.strokeRect(
+      offscreen.width - keyWidth - keyPadding * 2, keyPadding, keyWidth, keyHeight);
+    for (let i in this.model.datasets) {
+      i = parseInt(i);
+      let dataset = this.model.datasets[i];
+      oc.fillStyle = colors[i % colors.length];
+      oc.beginPath();
+      oc.arc(offscreen.width - keyPadding - keyWidth + 2, lineHeight * (i + 1.25) - 2, 3, 0, 6.28, false);
+      oc.fill();
+      oc.fillStyle = 'black';
+      oc.textAlign = 'left';
+      oc.fillText(dataset.runName, offscreen.width - keyPadding - keyWidth + 7, keyPadding + lineHeight * (i + 1.125));
+    }
+
+    this.ctx.drawImage(offscreen, leftPadding, topPadding);
+    this.ctx.strokeStyle = 'black';
+    this.ctx.strokeRect(leftPadding, topPadding, graphExternalWidth, graphExternalHeight);
+
+    this.ctx.textAlign = 'center';
+    this.ctx.fillStyle = 'black';
+    this.ctx.font = '24px Arial';
+    this.ctx.fillText(
+      this.model.title,
+      this.cvs.width / 2,
+      topPadding - 10,
+    );
+
+  }
+}
+customElements.define('mr-chart', MrChart);
+
+function add_charts() {
+  return get_metrics(dirInput.value).then(metrics => {
+    graphsDiv.innerHTML = "";
+    for (let metricName in metrics) {
+      let model = new MrChartModel(metricName);
+      for (let run of metrics[metricName]) {
+        let runName = run.runName;
+        let X = run["x"];
+        let Y = run["y"];
+        let scatterModel = new ScatterModel(runName, metricName, X, Y);
+        model.add_dataset(scatterModel);
+      }
+      let chart = new MrChart(model);
+      graphsDiv.appendChild(chart);
+    }
+    return Array.from(graphsDiv);
+  });
+}
+
+window.addEventListener('load', () => {
+  dirInput.value = "logs";
+  runsInput.value = "run1,ruuuuuun2";
+  smoothInput.value = 20;
+  highClipInput.addEventListener('input', () => {
+    highClipInput.value = Math.max(0, Math.min(highClipInput.getAttribute('max'), highClipInput.value));
+  });
+  renderButton.addEventListener('click', () => {
+    for (let graph of graphsDiv.children) {
+      let model = graph.model;
+      graph.transact(graph => {
+        for (let ds of graph.model.datasets) {
+          ds.smooth = parseFloat(smoothInput.value);
+          ds.maxClip = parseFloat(highClipInput.value) / 100;
+        }
+      });
+    }
+  });
+  refreshButton.addEventListener('click', () => {
+    add_charts().then(() => {
+      renderButton.click();
+    });
+  });
+  refreshButton.click();
+})
+</script>
+</head>
+<body>
+<div class="bar">
+  <input id="dirInput" type="text">
+
+  <div style="border-left: solid black 1px"></div>
+
+  <input id="runsInput" type="text">
+</div>
+<div class="bar">
+  <div>smooth</div>
+  <input id="smoothInput" type="number" value="0" style="width:4em;" step="5">
+
+  <div style="border-left: solid black 1px"></div>
+
+  <div>clip</div>
+  <input id="highClipInput" type="number" value="0" style="width:4em;" step="5" max=95>
+
+  <div style="border-left: solid black 1px"></div>
+
+  <button id="renderButton">Render</button>
+
+  <button id="refreshButton">Refresh</button>
+
+</div>
+<div id="graphsDiv"></div>
+</body>
+</html>

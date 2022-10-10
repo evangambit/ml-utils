@@ -2,6 +2,8 @@ import http.server
 
 import json, os, sys
 
+import importlib.resources as pkg_resources
+
 from urllib.parse import urlparse, parse_qs
 
 class MyHandler(http.server.BaseHTTPRequestHandler):
@@ -9,8 +11,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
     path = urlparse(self.path)
     params = parse_qs(path.query)
     if self.path == "/":
-      with open(os.path.join(os.path.split(__file__)[0], "index.html"), "r") as f:
-        self._send_text(f.read(), 200)
+        self._send_text(pkg_resources.read_text(__package__, "index.html"), 200)
     elif self.path.startswith("/api/get_runs"):
       self._send_text(json.dumps(os.listdir(params["dir"][0])), 200)
       return
