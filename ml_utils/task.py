@@ -93,8 +93,9 @@ class ClassificationTask(Task):
     l = self._loss(yhat, y)
     incorrect = (yhat.argmax(1) != y).to(torch.float32)
 
-    logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-    logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+    if mask_sum > 0:
+      logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
+      logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
 
 class RegressionTask(Task):
@@ -150,8 +151,9 @@ class RegressionTask(Task):
     l = self._loss(yhat, y)
     incorrect = (torch.abs(yhat - y) > 1.0).to(torch.float32)
 
-    logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-    logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+    if mask_sum > 0:
+      logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
+      logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
 
 class DetectionTask(Task):
@@ -199,7 +201,6 @@ class DetectionTask(Task):
 
     if mask_sum > 0:
       logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-    if mask_sum > 0:
       logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
 
