@@ -44,8 +44,15 @@ class Task:
     """
     pass
 
+  def metrics(self, predictions : dict, batch : dict, it : int, run : str):
+    raise NotImplementedError('')
+    return {}
+
   def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
-    pass
+    metrics = self.metrics(predictions, batch, it, run)
+    for k in metrics:
+      value, n = metrics[k]
+      logger.log(run, k, it, value, n)
 
 
 Task.taskId = 0
@@ -82,20 +89,21 @@ class ClassificationTask(Task):
       return 0.0
     return (l * mask).sum() / mask_sum
 
-  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
+  def metrics(self, predictions : dict, batch : dict, it : int, run : str):
     yhat = predictions[self.name]
     y = batch[self.name]
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
     if mask_sum == 0:
-      return
+      return {}
 
     l = self._loss(yhat, y)
     incorrect = (yhat.argmax(1) != y).to(torch.float32)
 
-    if mask_sum > 0:
-      logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-      logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+    return {
+      f"{self.name}:loss": (float((l * mask).sum()) / mask_sum, mask_sum),
+      f"{self.name}:error": (float((incorrect * mask).sum()) / mask_sum, mask_sum),
+    }
 
 
 class RegressionTask(Task):
@@ -140,20 +148,21 @@ class RegressionTask(Task):
       return 0.0
     return (l * mask).sum() / mask_sum
 
-  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
+  def metrics(self, predictions : dict, batch : dict, it : int, run : str):
     yhat = predictions[self.name]
     y = (batch[self.name] - self.avg) / self.std
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
     if mask_sum == 0:
-      return
+      return {}
 
     l = self._loss(yhat, y)
     incorrect = (torch.abs(yhat - y) > 1.0).to(torch.float32)
 
-    if mask_sum > 0:
-      logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-      logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+    return {
+      f"{self.name}:loss": (float((l * mask).sum()) / mask_sum, mask_sum),
+      f"{self.name}:error": (float((incorrect * mask).sum()) / mask_sum, mask_sum),
+    }
 
 
 class DetectionTask(Task):
@@ -188,20 +197,21 @@ class DetectionTask(Task):
       return 0.0
     return (l * mask).sum() / mask_sum
 
-  def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
+  def metrics(self, predictions : dict, batch : dict, it : int, run : str):
     yhat = predictions[self.name]
     y = batch[self.name]
     mask = batch[self.name + '?']
     mask_sum = int(mask.sum())
     if mask_sum == 0:
-      return
+      return {}
 
     l = y * self._logSigmoid(predictions[self.name]) + (1 - y) * self._logSigmoid(-predictions[self.name])
     incorrect = ((yhat > 0) != (y > 0)).to(torch.float32)
 
-    if mask_sum > 0:
-      logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-      logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+    return {
+      f"{self.name}:loss": (float((l * mask).sum()) / mask_sum, mask_sum),
+      f"{self.name}:error": (float((incorrect * mask).sum()) / mask_sum, mask_sum),
+    }
 
 
 class ConcatedDataset(tdata.Dataset):

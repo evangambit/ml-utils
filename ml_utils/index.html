@@ -548,7 +548,7 @@ class MrChart extends HTMLElement {
 
     this.ctx.textAlign = 'center';
     this.ctx.fillStyle = 'black';
-    this.ctx.font = '24px Arial';
+    this.ctx.font = '20px Arial';
     this.ctx.fillText(
       this.model.title,
       this.cvs.width / 2,
@@ -580,7 +580,8 @@ function add_charts() {
 
 window.addEventListener('load', () => {
   dirInput.value = "logs";
-  smoothInput.value = 20;
+  runsInput.value = "train,test";
+  smoothInput.value = 1;
   highClipInput.addEventListener('input', () => {
     highClipInput.value = Math.max(0, Math.min(highClipInput.getAttribute('max'), highClipInput.value));
   });
