@@ -2,7 +2,6 @@ import torch
 from torch import nn
 import torch.utils.data as tdata
 import numpy as np
-from scipy.ndimage import uniform_filter1d
 
 import math
 
@@ -32,7 +31,7 @@ class BatchReshape(nn.Module):
 
 
 class Task:
-  def __init__(self, name):
+  def __init__(self, name : str):
     self.name = name
     self.default = None
     self.missing = None
@@ -48,32 +47,19 @@ class Task:
   def log_metrics(self, predictions : dict, batch : dict, it : int, run : str, logger):
     pass
 
-  @staticmethod
-  def plot_helper(A, smooth):
-    time = np.array([a[0] for a in A])
-    samplesize = [a[1] for a in A]
-    mom1 = np.array([a[2] for a in A])
-    mom2 = np.array([a[3] for a in A])
-
-    N = uniform_filter1d(samplesize, smooth)
-    avg = uniform_filter1d(mom1, smooth) / N
-    var = np.maximum(
-      uniform_filter1d(mom2 * samplesize, smooth) - uniform_filter1d((mom1**2) * samplesize, smooth)
-    , 0.0) / N
-
-    return (time, samplesize, avg, var)
 
 Task.taskId = 0
 
+
 class ClassificationTask(Task):
-  def __init__(self, name, classes):
+  def __init__(self, name : str, classes : list):
     Task.__init__(self, name)
     self.classes = classes
     self._loss = nn.CrossEntropyLoss(reduction='none')
     self.default = torch.tensor(0, dtype=torch.int64)
     self.missing = torch.tensor(0, dtype=torch.int64)
 
-  def create_heads(self, din):
+  def create_heads(self, din : int):
     head = nn.Linear(din, len(self.classes))
     with torch.no_grad():
       b = logit(1.0 / len(self.classes))
@@ -84,7 +70,7 @@ class ClassificationTask(Task):
       self.name: head
     }
 
-  def loss(self, predictions, batch):
+  def loss(self, predictions : dict, batch : dict):
     yhat = predictions[self.name]
     y = batch[self.name]
     mask = batch[self.name + '?']
@@ -121,15 +107,15 @@ class RegressionTask(Task):
   then the gradients between different tasks could have very different
   magnitudes.
   """
-  def __init__(self, name, avg = 0.0, std = 1.0):
+  def __init__(self, name : str, avg : float = 0.0, std : float = 1.0):
     Task.__init__(self, name)
     self.avg = avg
     self.std = std
     self.default = torch.tensor(0.0, dtype=torch.float32)
-    self.missing = torch.tensor(0, dtype=torch.int64)
+    self.missing = torch.tensor(0.0, dtype=torch.float32)
     self._loss = nn.MSELoss(reduction='none')
 
-  def create_heads(self, din):
+  def create_heads(self, din : int):
     head = nn.Linear(din, 1)
     with torch.no_grad():
       head.bias.zero_()
@@ -141,11 +127,11 @@ class RegressionTask(Task):
       )
     }
 
-  def loss(self, predictions, batch):
+  def loss(self, predictions : dict, batch : dict):
     yhat = predictions[self.name]
     y = (batch[self.name] - self.avg) / self.std
     mask = batch[self.name + '?']
-    mask_sum = float(mask.sum())
+    mask_sum = np.float32(mask.sum())
 
     l = self._loss(yhat, y)
 
@@ -169,14 +155,16 @@ class RegressionTask(Task):
 
 
 class DetectionTask(Task):
-  def __init__(self, name, classes):
+  def __init__(self, name : str, classes : list):
     Task.__init__(self, name)
-    assert isinstance(self.classes, list)
-    assert isinstance(self.classes[0], str)
+    assert isinstance(classes, list)
+    assert isinstance(classes[0], str)
     self.classes = classes
     self.default = torch.tensor(0.5, dtype=torch.float32)
+    self.missing = torch.tensor([0.5] * len(classes), dtype=torch.float32)
+    self._logSigmoid = nn.LogSigmoid()
 
-  def create_heads(self, din):
+  def create_heads(self, din : int):
     head = nn.Linear(din, len(self.classes))
     with torch.no_grad():
       head.bias.zero_()
@@ -185,14 +173,14 @@ class DetectionTask(Task):
       self.name: head
     }
 
-  def loss(self, predictions, batch):
+  def loss(self, predictions : dict, batch : dict):
     yhat = predictions[self.name]
     y = batch[self.name]
     assert yhat.shape == y.shape
     mask = batch[self.name + '?']
     mask_sum = float(mask.sum())
 
-    l = y * torch.log(yhat) + (1 - y) * torch.log(1 - yhat)
+    l = y * self._logSigmoid(predictions[self.name]) + (1 - y) * self._logSigmoid(-predictions[self.name])
 
     if mask_sum == 0.0:
       return 0.0
@@ -206,11 +194,13 @@ class DetectionTask(Task):
     if mask_sum == 0:
       return
 
-    l = self._loss(yhat, y)
-    incorrect = (yhat.argmax(1) != y).to(torch.float32)
+    l = y * self._logSigmoid(predictions[self.name]) + (1 - y) * self._logSigmoid(-predictions[self.name])
+    incorrect = ((yhat > 0) != (y > 0)).to(torch.float32)
 
-    logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
-    logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
+    if mask_sum > 0:
+      logger.log(run, f"{self.name}:loss", it, float((l * mask).sum()) / mask_sum, mask_sum)
+    if mask_sum > 0:
+      logger.log(run, f"{self.name}:error", it, float((incorrect * mask).sum()) / mask_sum, mask_sum)
 
 
 class ConcatedDataset(tdata.Dataset):
@@ -229,7 +219,7 @@ class ConcatedDataset(tdata.Dataset):
   def __len__(self):
     return sum(len(x) for x in self.datasets)
   
-  def __getitem__(self, idx):
+  def __getitem__(self, idx : int):
     i = 0
     while idx >= len(self.datasets[i]):
       idx -= len(self.datasets[i])
@@ -240,5 +230,3 @@ class ConcatedDataset(tdata.Dataset):
         batch[task.name] = task.default
         batch[task.name + '?'] = task.missing
     return batch
-
-

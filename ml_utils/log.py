@@ -59,3 +59,7 @@ class LoggerFamily:
     if run not in self.loggers:
       self.loggers[run] = Logger(os.path.join(self.path, run), **self._kwargs)
     self.loggers[run].log(metricName, x, y, n)
+
+  def flush(self):
+    for logger in self.loggers.values():
+      logger.flush()

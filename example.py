@@ -7,17 +7,19 @@ from torchvision import models
 
 import ml_utils
 
-class Dataset:
+logger = ml_utils.log.LoggerFamily('logs', sampleSizeToAggregate=3, logsPerWrite=2)
+
+class Dataset(tdata.Dataset):
   def __init__(self):
-    n = 100
+    n = 200
     self.X = np.random.normal(0, 1, (n, 3, 224, 224)).astype(np.float32)
     self.colors = np.random.randint(0, 3, (n,))
-    self.heights = np.random.uniform(0, 1, (n,))
-    self.tags = np.random.randint(0, 2, (n, 3))
+    self.heights = np.random.uniform(0, 1, (n,)).astype(np.float32)
+    self.tags = np.random.randint(0, 2, (n, 3)).astype(np.float32)
     self.tasks = [
       ml_utils.task.ClassificationTask('color', ['red', 'green', 'blue']),
       ml_utils.task.RegressionTask('height', 2.0, 0.5),
-      ml_utils.task.DetectionTasks('tags', ['good', 'cool', 'new'])
+      ml_utils.task.DetectionTask('tags', ['good', 'cool', 'new'])
     ]
 
   def __len__(self):
@@ -31,10 +33,10 @@ class Dataset:
       "color?": torch.tensor(1),
 
       "height": torch.tensor(self.heights[idx]),
-      "height?": torch.tensor(1 if idx % 3 else 0),
+      "height?": torch.tensor(1 if idx % 3 else 0, dtype=torch.int64),
 
-      "tags": torch.tensor(self.tags[idx]),
-      "tags?": torch.tensor(1 - self.tasks[2].missing.clone().detach() if idx % 4 else self.tasks[2].missing.clone().detach()),
+      "tags": torch.tensor(self.tags[idx]) if idx % 4 else self.tasks[2].missing.clone(),
+      "tags?": torch.tensor([1.0 if idx % 4 else 0.0] * 3),
     }
 
 # Create fake dataset
@@ -47,12 +49,16 @@ trainset = ml_utils.Subdataset(dataset, I[10:])
 testset = ml_utils.Subdataset(dataset, I[:10])
 
 # Load ResNext50
-# model = ml_utils.Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
-# model.load_state_dict(models.resnet.resnext50_32x4d(weights=models.resnet.ResNeXt50_32X4D_Weights.DEFAULT).state_dict())
-model = ml_utils.Resnet(block = models.resnet.BasicBlock, layers = [2, 2, 2, 2])
-model.load_state_dict(models.resnet.resnet18().state_dict())
+model = ml_utils.Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
+model.load_state_dict(models.resnet.resnext50_32x4d(weights=models.resnet.ResNeXt50_32X4D_Weights.DEFAULT).state_dict())
+
+# Load ResNet18
+# model = ml_utils.Resnet(block = models.resnet.BasicBlock, layers = [2, 2, 2, 2])
+# model.load_state_dict(models.resnet.resnet18().state_dict())
+
+model = ml_utils.Resnet(block = models.resnet.BasicBlock, layers = [1, 1, 1, 1])
+
 model.init(dataset.tasks)
-metrics = ml_utils.MetricDict()
 
 kUseCuda = torch.cuda.device_count() > 0
 if kUseCuda:
@@ -82,26 +88,12 @@ for split, batch in ml_utils.interweaver(
   if split == 'train':
     loss = 0.0
     for task in dataset.tasks:
-      loss = loss + dataset.tasks[0].loss(yhat, batch)
+      loss = loss + task.loss(yhat, batch)
+      task.log_metrics(yhat, batch, it, split, logger)
     loss.backward()
     opt.step()
-
-  for task in dataset.tasks:
-    for k, v in task.metrics(yhat, batch, it, split).items():
-      metrics[k].append(v)
 
   if it >= 50:
     break
 
-for i, k in enumerate(['height', 'color', 'good', 'cool', 'new']):
-  plt.subplot(3, 2, i + 1)
-  plt.title(k)
-  for split in ['train', 'test']:
-    t, n, avg, var = ml_utils.task.Task.plot_helper(metrics[f'{split}:height:loss'], 3)
-    plt.plot(t, avg, label=split)
-  plt.legend()
-
-plt.show()
-
-
-
+logger.flush()
