@@ -10,8 +10,8 @@ class RamLogger:
 
   def metric(self, name):
     A = [a for a in self.metrics[name] if a[2] >= self.metricMinSize]
-    x = np.array([a[0] for a in A], dtype=np.float64)
-    y = np.array([a[1] for a in A], dtype=np.float64)
+    x = np.array([a[0] for a in A[:-1]], dtype=np.float64)
+    y = np.array([a[1] for a in A[:-1]], dtype=np.float64)
     return x, y
 
   def log(self, metricName : str, x : float, y : float, n : int = 1):
