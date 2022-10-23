@@ -1,6 +1,8 @@
 from torch.utils import data as tdata
 import numpy as np
 
+from .task import ClassificationTask
+
 class DatasetWrapper(tdata.Dataset):
   """
   Can be used to convert a typical torchvision dataset to the format we expect.
@@ -14,10 +16,11 @@ class DatasetWrapper(tdata.Dataset):
   #   "label": 4,
   # }
   """
-  def __init__(self, dataset, args):
+  def __init__(self, dataset, args, tasks):
     super().__init__()
     self.dataset = dataset
     self.args = args
+    self.tasks = tasks
 
   def __getattr__(self, attr):
     return getattr(self.dataset, attr)
