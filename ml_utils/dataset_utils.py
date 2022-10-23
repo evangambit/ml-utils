@@ -22,6 +22,9 @@ class DatasetWrapper(tdata.Dataset):
     self.args = args
     self.tasks = tasks
 
+  def __len__(self):
+    return len(self.dataset)
+
   def __getattr__(self, attr):
     return getattr(self.dataset, attr)
 
