@@ -98,8 +98,14 @@ class ClassificationTask(Task):
   def metrics(self, predictions : dict, batch : dict, it : int, run : str):
     yhat = predictions[self.name]
     y = batch[self.name]
-    mask = batch[self.name + '?']
-    mask_sum = int(mask.sum())
+
+    if self.name + '?' in batch:
+      mask = batch[self.name + '?']
+      mask_sum = int(mask.sum())
+    else:
+      mask = 1.0
+      mask_sum = y.shape[0]
+
     if mask_sum == 0:
       return {}
 
