@@ -18,7 +18,7 @@ class RamLogger:
     if metricName not in self.metrics:
       self.metrics[metricName] = [[0.0, 0.0, 0.0]]
 
-    A = self.metrics[name]
+    A = self.metrics[metricName]
     a = A[-1]
     if a[2] >= self.metricMinSize:
       A[-1] = (a[0] / a[2], a[1] / a[2], a[2])
