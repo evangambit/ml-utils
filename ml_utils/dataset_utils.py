@@ -29,7 +29,7 @@ class DatasetWrapper(tdata.Dataset):
     return getattr(self.dataset, attr)
 
   def __getitem__(self, idx):
-    A = self.dataset[self.indices[idx]]
+    A = self.dataset[idx]
     assert len(A) == len(self.args)
     R = {}
     for k, v in zip(self.args, A):
