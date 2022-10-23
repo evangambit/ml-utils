@@ -4,7 +4,7 @@ import os
 from collections import defaultdict
 
 class RamLogger:
-  def __init__(self, metricMinSize = 0.0):
+  def __init__(self, metricMinSize = 1):
     self.metrics = {}
     self.metricMinSize = metricMinSize
 
@@ -14,7 +14,7 @@ class RamLogger:
     y = np.array([a[1] for a in A], dtype=np.float64)
     return x, y
 
-  def log(self, metricName : str, x : float, y : float, n : float = 1.0):
+  def log(self, metricName : str, x : float, y : float, n : int = 1):
     if metricName not in self.metrics:
       self.metrics[metricName] = [[0.0, 0.0, 0.0]]
 
