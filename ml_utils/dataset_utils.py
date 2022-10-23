@@ -2,39 +2,65 @@ from torch.utils import data as tdata
 import numpy as np
 
 from .task import ClassificationTask
+from .encodable import Encodable
 
-class DatasetWrapper(tdata.Dataset):
-  """
-  Can be used to convert a typical torchvision dataset to the format we expect.
+class MNIST(tdata.Dataset, Encodable):
+  def __init__(self, train : bool):
+    self.train = train
+    from torchvision import datasets, transforms
+    self.dataset = datasets.MNIST(root='/tmp', train=train, download=True, transform=transforms.ToTensor())
+    self.tasks = [ClassificationTask('mnist_labels', '0123456789')]
 
-  dataset = datasets.MNIST(train = True)
-  dataset = DatasetWrapper(dataset, ['image', 'label'], transform=transforms.ToTensor())
-
-  print(dataset[0])
-  # {
-  #   "image": <1,28,28 Pytorch tensor>
-  #   "label": 4,
-  # }
-  """
-  def __init__(self, dataset, args, tasks):
-    super().__init__()
-    self.dataset = dataset
-    self.args = args
-    self.tasks = tasks
-
+  def encode(self):
+    return {
+      "$type": "ml_utils.dataset_utils.mnist",
+      "train": self.train
+    }
+  
+  @classmethod
+  def decode(klass, state):
+    return MNIST(state["train"])
+  
   def __len__(self):
     return len(self.dataset)
+  
+  def __getitem__(self, i):
+    x, y = self.dataset[i]
+    return {
+      "images": x,
+      "mnist_labels": y,
+    }
 
-  def __getattr__(self, attr):
-    return getattr(self.dataset, attr)
+Encodable.add_type("ml_utils.dataset_utils.mnist", MNIST)
 
-  def __getitem__(self, idx):
-    A = self.dataset[idx]
-    assert len(A) == len(self.args)
-    R = {}
-    for k, v in zip(self.args, A):
-      R[k] = v
-    return R
+class CIFAR10(tdata.Dataset, Encodable):
+  def __init__(self, train : bool):
+    self.train = train
+    from torchvision import datasets, transforms
+    self.dataset = datasets.CIFAR10(root='/tmp', train=train, download=True, transform=transforms.ToTensor())
+    self.tasks = [ClassificationTask('cifar10_labels', '0123456789')]
+
+  def encode(self):
+    return {
+      "$type": "ml_utils.dataset_utils.cifar10",
+      "train": self.train
+    }
+  
+  @classmethod
+  def decode(klass, state):
+    return CIFAR10(state["train"])
+  
+  def __len__(self):
+    return len(self.dataset)
+  
+  def __getitem__(self, i):
+    x, y = self.dataset[i]
+    return {
+      "images": x,
+      "cifar10_labels": y,
+    }
+
+Encodable.add_type("ml_utils.dataset_utils.cifar10", CIFAR10)
 
 class OverlappingSampler(tdata.Sampler):
   """
