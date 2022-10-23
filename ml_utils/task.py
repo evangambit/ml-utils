@@ -82,8 +82,12 @@ class ClassificationTask(Task):
   def loss(self, predictions : dict, batch : dict):
     yhat = predictions[self.name]
     y = batch[self.name]
-    mask = batch[self.name + '?']
-    mask_sum = float(mask.sum())
+    if self.name + '?' in batch:
+      mask = batch[self.name + '?']
+      mask_sum = float(mask.sum())
+    else:
+      mask = 1.0
+      mask_sum = batch.shape[0]
 
     l = self._loss(yhat, y)
 
