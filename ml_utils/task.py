@@ -87,7 +87,7 @@ class ClassificationTask(Task):
       mask_sum = float(mask.sum())
     else:
       mask = 1.0
-      mask_sum = batch.shape[0]
+      mask_sum = y.shape[0]
 
     l = self._loss(yhat, y)
 
