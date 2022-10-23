@@ -2,6 +2,8 @@ import torch
 from torch import nn
 from torchvision import models
 
+from .encodable import Encodable
+
 class Mean(nn.Module):
   def __init__(self, *axes):
     super(Mean, self).__init__()
@@ -103,11 +105,6 @@ class ResConv2d(nn.Module):
     return self.gate(out)
 
 class Resnet(models.ResNet):
-  """
-  model = ml_utils.Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
-  model.load_state_dict(models.resnet.resnext50_32x4d(weights=models.resnet.ResNeXt50_32X4D_Weights).state_dict())
-  model.init(dataset.tasks)
-  """
   def __init__(self, *args, **kwargs):
     super(Resnet, self).__init__(*args, **kwargs)
 
@@ -143,3 +140,29 @@ class Resnet(models.ResNet):
 
   def forward(self, x):
     return self.head(self.embed(x))
+
+class ModelBuilder(Encodable):
+  def build(self):
+    raise NotImplementedError()
+
+class ResNeXt50Builder(ModelBuilder):
+  def __init__(self, pretrained = False):
+    self.pretrained = pretrained
+
+  def build(self):
+    model = Resnet(block = models.resnet.Bottleneck, layers = [3, 4, 6, 3], groups=32, width_per_group=4)
+    if self.pretrained:
+      model.load_state_dict(models.resnet.resnext50_32x4d(weights=models.resnet.ResNeXt50_32X4D_Weights).state_dict())
+    return model
+
+  def encode(self):
+    return {
+      "$type": "ml_utils.nn_utils.ResnetBuilder",
+      "pretrained": self.pretrained,
+    }
+  
+  @classmethod
+  def decode(klass, state):
+    return ResNeXt50Builder(pretrained = state["pretrained"])
+
+Encodable.add_type("ml_utils.nn_utils.ResnetBuilder", ResNeXt50Builder)

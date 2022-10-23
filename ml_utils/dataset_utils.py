@@ -110,8 +110,8 @@ def interweaver(*A):
     name = names[i % n]
     for _ in range(steps[i % n]):
       try:
-        yield name, next(iters[i % n])
+        yield name, loaders[i % n].dataset, next(iters[i % n])
       except StopIteration:
         iters[i % n] = iter(loaders[i % n])
-        yield name, next(iters[i % n])
+        yield name, loaders[i % n].dataset, next(iters[i % n])
     i += 1

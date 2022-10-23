@@ -5,6 +5,8 @@ import numpy as np
 
 import math
 
+from .encodable import Encodable
+
 def logit(x):
   if isinstance(x, np.ndarray):
     return np.log(x / (1.0 - x))
@@ -30,12 +32,12 @@ class BatchReshape(nn.Module):
     return x.reshape((x.shape[0],) + self.shape)
 
 
-class Task:
+class Task(Encodable):
   def __init__(self, name : str):
     self.name = name
     self.default = None
     self.missing = None
-    self.gTaskId = Task.taskId
+    self.taskId = Task.taskId
     Task.taskId += 1
 
   def loss(self, predictions, batch):
@@ -105,6 +107,21 @@ class ClassificationTask(Task):
       f"{self.name}:error": (float((incorrect * mask).sum()) / mask_sum, mask_sum),
     }
 
+  def encode(self):
+    return {
+      "$type": "ml_utils.task.ClassificationTask",
+      "kwargs": {
+        "name": self.name,
+        "classes": self.classes,
+      },
+    }
+  
+  @classmethod
+  def decode(klass, state):
+    return ClassificationTask(**state["kwargs"])
+
+Encodable.add_type("ml_utils.task.ClassificationTask", ClassificationTask)
+
 
 class RegressionTask(Task):
   """
@@ -164,6 +181,21 @@ class RegressionTask(Task):
       f"{self.name}:error": (float((incorrect * mask).sum()) / mask_sum, mask_sum),
     }
 
+  def encode(self):
+    return {
+      "$type": "ml_utils.task.RegressionTask",
+      "kwargs": {
+        "name": self.name,
+        "avg": self.avg,
+        "std": self.std,
+      },
+    }
+  
+  @classmethod
+  def decode(klass, state):
+    return RegressionTask(**state["kwargs"])
+
+Encodable.add_type("ml_utils.task.RegressionTask", RegressionTask)
 
 class DetectionTask(Task):
   def __init__(self, name : str, classes : list):
@@ -212,6 +244,21 @@ class DetectionTask(Task):
       f"{self.name}:loss": (float((l * mask).sum()) / mask_sum, mask_sum),
       f"{self.name}:error": (float((incorrect * mask).sum()) / mask_sum, mask_sum),
     }
+
+  def encode(self):
+    return {
+      "$type": "ml_utils.task.DetectionTask",
+      "kwargs": {
+        "name": self.name,
+        "classes": self.classes,
+      },
+    }
+  
+  @classmethod
+  def decode(klass, state):
+    return DetectionTask(**state["kwargs"])
+
+Encodable.add_type("ml_utils.task.DetectionTask", DetectionTask)
 
 
 class ConcatedDataset(tdata.Dataset):
